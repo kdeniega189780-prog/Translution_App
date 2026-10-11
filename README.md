@@ -11,6 +11,7 @@ See [Secretary and mechanic workspaces](docs/ROLES.md) for permissions, the repa
 - Currency is PHP and local time is Asia/Manila. Maximum four confirmed bookings per day, with no identical start times.
 - The booking becomes the repair job; staff do not re-enter vehicle/customer details. One primary service per job, with any number of parts used.
 - Admin changes default service prices and can revise the job's service estimate during diagnosis before parts are used. Parts are billed at their recorded unit cost; no invented markup, tax, or discounts.
+- Admins and purchasers can use **Inventory → Stock Out** beside a part to record non-repair removals (for example, damaged items or supplier returns). Enter the quantity and reason; the stock ledger records who removed it and the remaining balance. Stock cannot become negative, and stale forms require review. Record vehicle repair usage on the repair job so it is included in the invoice.
 - The configured Singapore supplier name is a placeholder. Orders are marked after arranging purchases with the supplier; receiving confirms the whole delivery.
 - Customer decline pauses work. Revising the diagnosis requests fresh approval. Secretaries may record a walk-in customer's decision only with a contact note.
 - Payments are recorded in full after receipt outside the app. No external payment gateway is implied.
@@ -79,6 +80,14 @@ Use XAMPP with **PHP 8.2.12** and **MariaDB 10.4.32**, plus Composer 2. Laravel 
 
 To serve through XAMPP Apache, create a virtual host whose `DocumentRoot` and `<Directory>` point to this project's **public** directory. Set `AllowOverride All`, enable `mod_rewrite`, add the hostname to the Windows hosts file, and update `APP_URL`. Do not expose the project root as the web document root.
 
+### Extra sample customers and workshop history
+
+On an existing local demo database, run `php artisan db:seed --class=WorkshopDemoSeeder` to load the expanded pack of 48 fictional customers and vehicles, 120 paid service visits spread across recent months, and 16 bookings in pending, scheduled, processing, and completed stages. If the original 24-customer pack is already loaded, this adds only the remaining 24 customers, 72 paid visits, and 8 active bookings. Payment methods vary across visits to populate the layered chart. The admin graph opens on Weekly; choose Monthly to explore the full history.
+
+This additive sample pack keeps existing records and login credentials, skips previously imported demo customers on repeat runs, and refuses production environments. Sample names include `(Demo)`, plates use `DEMO`, and emails use `.test`. It follows the booking/invoice workflow without consuming existing parts stock. Run this command separately from the fresh-database seeder; do not reset the database to add samples.
+
+To give those sample customers demo logins, run `php artisan db:seed --class=WorkshopDemoAccountsSeeder` after loading the sample pack. This links each existing customer to a customer-role account and appends generated temporary passwords to `storage/app/private/demo-accounts.txt`. Existing credentials are preserved, and repeat runs skip linked accounts. On first login, change the password and enter a valid mobile number. Each account sees only its own vehicles and bookings; the original staff demo accounts retain their role-based access.
+
 ### Password reset email
 
 Local `.env` uses `MAIL_MAILER=log`: reset links are written to `storage/logs/mail.log`, not sent over the internet. Open that private log during local testing. To send real messages, configure SMTP through `.env` using the fields in `.env.example`, set `MAIL_MAILER=smtp`, and run `php artisan config:clear`. Tokens expire after 15 minutes and can be used once. No queue worker is required.
@@ -109,9 +118,9 @@ The application layer centralizes multi-record business changes. Controllers do 
 
 ## 4. Design system
 
-All application styling lives in [public/css/app.css](public/css/app.css); enhancements live in [public/js/app.js](public/js/app.js). Palette tokens are defined in `:root`. Shared inputs, status badges, icons, alerts, and progress steppers are in `resources/views/components`. Login and workspace layouts are separate.
+All application styling lives in [public/css/app.css](public/css/app.css); enhancements live in [public/js/app.js](public/js/app.js). Palette tokens are defined in `:root`: logo-inspired deep navy (`#090735`), crimson (`#AD1732`), white cards, and a soft off-white canvas (`#F5F6FA`). Body and input text use 16px at the default browser size, most supporting text uses 14–15px, and headings use a larger hierarchy. Font sizes use rem units to respect browser preferences. Shared inputs, status badges, icons, alerts, and progress steppers are in `resources/views/components`. Login and workspace layouts are separate.
 
-The Admin dashboard includes a Sales overview graph with Daily (hourly), Weekly (Monday–Sunday), and Monthly (calendar day) views. Choose a Report date to review an earlier period, hover/tap for exact amounts, or use the arrow keys while the graph is focused. Only recorded payments count; unpaid, archived, and reversed payments are excluded. Each view links to its matching full report and includes an accessible amounts table. The graph uses local SVG and plain JavaScript.
+The Admin dashboard includes a Sales overview graph with Daily (hourly), Weekly (Monday–Sunday), and Monthly (calendar day) views. Choose a Report date to review an earlier period, hover/tap for exact amounts, or use the arrow keys while the graph is focused. Only recorded payments count; unpaid, archived, and reversed payments are excluded. Each view links to its matching full report and includes an accessible amounts table. The graph uses CSS columns and plain JavaScript. Each column stacks actual payments by method (Cash, GCash, Bank Transfer, PayMaya, and Other for legacy records), with system palette colors and totals beneath the day labels. Weekly is the default view.
 
 Pending = peach; Scheduled = lavender; Processing = powder blue; Completed = butter yellow; Paid/Released = pastel green. Labels accompany every color. System fonts and local assets keep the interface usable without a third-party CDN.
 

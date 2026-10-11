@@ -143,6 +143,83 @@ class WorkshopTest extends TestCase
         $this->assertSame(1, StockMovement::count());
     }
 
+    public function test_admin_and_purchaser_can_record_audited_stock_out(): void
+    {
+        $this->receive(4);
+        foreach ([$this->admin, $this->buyer] as $actor) {
+            $this->loginAs($actor)->get(route('inventory.index'))
+                ->assertOk()->assertSee(route('inventory.stock-out.create', $this->part));
+            $this->get(route('inventory.stock-out.create', $this->part))->assertOk()->assertSee('Quantity to remove');
+            $this->post(route('inventory.stock-out.store', $this->part), [
+                'quantity' => 2, 'expected_quantity' => $this->part->fresh()->quantity,
+                'reason' => 'Damaged filters returned to supplier',
+            ])->assertRedirect(route('inventory.index'))->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('stock_movements', [
+                'part_id' => $this->part->id, 'user_id' => $actor->id,
+                'type' => 'stock_out', 'quantity' => -2, 'balance' => $this->part->fresh()->quantity,
+                'note' => 'Damaged filters returned to supplier', 'booking_id' => null, 'parts_order_id' => null,
+            ]);
+            $this->assertDatabaseHas('activity_logs', ['user_id' => $actor->id, 'action' => 'stock.out', 'subject_id' => $this->part->id]);
+        }
+        $this->assertSame(0, $this->part->fresh()->quantity);
+        $this->assertSame(0, (int) $this->part->movements()->sum('quantity'));
+        $this->assertSame('125.50', $this->part->fresh()->unit_cost);
+        $this->get(route('inventory.index'))->assertSee('Out of stock')->assertSee('Damaged filters returned to supplier');
+        $this->get(route('inventory.stock-out.create', $this->part))->assertSee('This part is out of stock.')->assertDontSee('Record stock out</button>', false);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('job_parts', 0);
+    }
+
+    public function test_stock_out_rejects_invalid_values_without_changing_inventory(): void
+    {
+        $this->receive(3);
+        $valid = ['quantity' => 1, 'expected_quantity' => 3, 'reason' => 'Damaged packaging'];
+        $this->loginAs($this->admin);
+        foreach ([
+            ['quantity' => 0], ['quantity' => -1], ['quantity' => 4], ['quantity' => 1.5],
+            ['quantity' => 10001], ['reason' => '   '], ['reason' => str_repeat('x', 256)],
+            ['expected_quantity' => null], ['expected_quantity' => -1],
+        ] as $invalid) {
+            $this->post(route('inventory.stock-out.store', $this->part), array_replace($valid, $invalid))
+                ->assertSessionHasErrors(array_key_first($invalid) === 'expected_quantity' ? 'expected_quantity' : array_key_first($invalid));
+        }
+        $this->assertSame(3, $this->part->fresh()->quantity);
+        $this->assertSame(1, StockMovement::count());
+        $this->assertDatabaseMissing('activity_logs', ['action' => 'stock.out']);
+    }
+
+    public function test_stock_out_rejects_repeat_submissions_and_stale_stock(): void
+    {
+        $this->receive(5);
+        $this->loginAs($this->buyer);
+        $data = ['quantity' => 1, 'expected_quantity' => 5, 'reason' => 'Supplier return'];
+        $this->post(route('inventory.stock-out.store', $this->part), $data)->assertSessionHasNoErrors();
+        $this->post(route('inventory.stock-out.store', $this->part), $data)->assertSessionHasErrors('quantity');
+        $this->assertSame(4, $this->part->fresh()->quantity);
+        $this->assertSame(1, StockMovement::where('type', 'stock_out')->count());
+
+        $booking = $this->processing();
+        app(BookingWorkflow::class)->usePart($this->mechanic, $booking, ['part_id' => $this->part->id, 'quantity' => 1]);
+        $data['expected_quantity'] = 4;
+        $this->post(route('inventory.stock-out.store', $this->part), $data)->assertSessionHasErrors('quantity');
+        $this->assertSame(3, $this->part->fresh()->quantity);
+        $this->assertSame(1, StockMovement::where('type', 'stock_out')->count());
+    }
+
+    public function test_stock_out_is_restricted_to_inventory_roles(): void
+    {
+        $this->receive();
+        $this->get(route('inventory.stock-out.create', $this->part))->assertRedirect(route('login'));
+        foreach ([$this->secretary, $this->mechanic, $this->customer] as $actor) {
+            $this->loginAs($actor)->get(route('inventory.stock-out.create', $this->part))->assertForbidden();
+            $this->post(route('inventory.stock-out.store', $this->part), [
+                'quantity' => 1, 'expected_quantity' => 5, 'reason' => 'Supplier return',
+            ])->assertForbidden();
+        }
+        $this->assertSame(5, $this->part->fresh()->quantity);
+        $this->assertSame(1, StockMovement::count());
+    }
+
     public function test_payment_is_idempotent_and_reversal_is_audited(): void
     {
         $b = $this->processing();

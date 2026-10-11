@@ -7,6 +7,8 @@ use Carbon\CarbonImmutable;
 
 class DashboardSalesReport
 {
+    public const PAYMENT_METHODS = ['Cash', 'GCash', 'Bank Transfer', 'PayMaya', 'Other'];
+
     /** Build all three chart views from recorded payments in one database read. */
     public function build(string $date): array
     {
@@ -18,7 +20,7 @@ class DashboardSalesReport
         ];
         $first = min(array_column($windows, 0));
         $last = max(array_column($windows, 1));
-        $payments = Invoice::query()->select(['paid_at', 'total'])
+        $payments = Invoice::query()->select(['paid_at', 'total', 'payment_method'])
             ->whereBetween('paid_at', [$first, $last])->get();
         $charts = [];
 
@@ -32,6 +34,7 @@ class DashboardSalesReport
                     'description' => $at->format($period === 'daily' ? 'M j, Y · g A' : 'D, M j, Y'),
                     'amount' => '0.00',
                     'payments' => 0,
+                    'methods' => array_fill_keys(self::PAYMENT_METHODS, '0.00'),
                 ];
             }
 
@@ -45,6 +48,8 @@ class DashboardSalesReport
                 $index = $period === 'daily' ? $at->hour : (int) $start->diffInDays($at->startOfDay());
                 $points[$index]['amount'] = bcadd($points[$index]['amount'], $payment->total, 2);
                 $points[$index]['payments']++;
+                $method = in_array($payment->payment_method, self::PAYMENT_METHODS, true) ? $payment->payment_method : 'Other';
+                $points[$index]['methods'][$method] = bcadd($points[$index]['methods'][$method], $payment->total, 2);
                 $total = bcadd($total, $payment->total, 2);
                 $paymentCount++;
             }

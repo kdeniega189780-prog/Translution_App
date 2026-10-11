@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="theme-color" content="#eaf3ee">
+    <meta name="theme-color" content="#090735">
     <meta name="description" content="Transolutions Automatic Transmission Overhaul in Davao City. Request a check-up and follow your vehicle’s care from diagnosis to handover.">
     <title>Transolutions · A smoother ride starts here</title>
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">

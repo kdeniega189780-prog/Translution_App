@@ -44,7 +44,8 @@ document.querySelectorAll("[data-sales-chart]").forEach((card) => {
     const points = JSON.parse(plot.dataset.points);
     const dots = Array.from(plot.querySelectorAll("[data-sales-point]"));
     const tooltip = plot.querySelector("[data-sales-tooltip]");
-    const guide = plot.querySelector("[data-sales-guide]");
+    const scroller = plot.querySelector("[data-sales-scroll]");
+    const bars = plot.querySelector("[data-sales-bars]");
     let selected = 0;
     const show = (index, announce = false) => {
       selected = Math.max(0, Math.min(points.length - 1, index));
@@ -52,19 +53,36 @@ document.querySelectorAll("[data-sales-chart]").forEach((card) => {
       dots.forEach((dot, i) =>
         dot.classList.toggle("is-active", i === selected),
       );
-      const x = dots[selected].getAttribute("cx");
-      guide.setAttribute("x1", x);
-      guide.setAttribute("x2", x);
+      const bar = dots[selected];
+      if (announce) {
+        const barRect = bar.getBoundingClientRect();
+        const scrollRect = scroller.getBoundingClientRect();
+        if (barRect.left < scrollRect.left)
+          scroller.scrollLeft += barRect.left - scrollRect.left;
+        else if (barRect.right > scrollRect.right)
+          scroller.scrollLeft += barRect.right - scrollRect.right;
+      }
       tooltip.querySelector("[data-sales-tooltip-label]").textContent =
         point.description;
       tooltip.querySelector("[data-sales-tooltip-amount]").textContent =
         money.format(point.amount);
       tooltip.querySelector("[data-sales-tooltip-count]").textContent =
         `${point.payments} ${point.payments === 1 ? "payment" : "payments"}`;
+      const breakdown = tooltip.querySelector("[data-sales-tooltip-methods]");
+      breakdown.replaceChildren();
+      Object.entries(point.methods).forEach(([method, amount]) => {
+        if (Number(amount) <= 0) return;
+        const row = document.createElement("span");
+        row.textContent = `${method}: ${money.format(amount)}`;
+        breakdown.append(row);
+      });
       tooltip.hidden = false;
-      plot.classList.add("is-exploring");
+      const rect = bar.getBoundingClientRect();
       const left =
-        (Number(x) / 1000) * plot.clientWidth - tooltip.offsetWidth / 2;
+        rect.left -
+        plot.getBoundingClientRect().left +
+        rect.width / 2 -
+        tooltip.offsetWidth / 2;
       tooltip.style.left = `${Math.max(0, Math.min(plot.clientWidth - tooltip.offsetWidth, left))}px`;
       if (announce)
         plot.querySelector("[data-sales-announcement]").textContent =
@@ -72,19 +90,20 @@ document.querySelectorAll("[data-sales-chart]").forEach((card) => {
     };
     const hide = () => {
       tooltip.hidden = true;
-      plot.classList.remove("is-exploring");
       dots.forEach((dot) => dot.classList.remove("is-active"));
     };
     const explore = (event) => {
-      const rect = plot.getBoundingClientRect();
-      const fraction = ((event.clientX - rect.left) / rect.width - 0.02) / 0.96;
-      show(
-        Math.round(fraction * (points.length - 1)),
-        event.type === "pointerdown",
-      );
+      const rect = bars.getBoundingClientRect();
+      const fraction = (event.clientX - rect.left) / rect.width;
+      show(Math.floor(fraction * points.length), event.type === "pointerdown");
     };
     plot.addEventListener("pointermove", explore);
     plot.addEventListener("pointerdown", explore);
+    scroller.addEventListener("scroll", () => {
+      if (document.activeElement === plot && !tooltip.hidden) show(selected);
+      else hide();
+    });
+    plot.addEventListener("pointercancel", hide);
     plot.addEventListener("pointerleave", () => {
       if (document.activeElement !== plot) hide();
     });

@@ -19,7 +19,7 @@ class DashboardController extends Controller
         $data = ['date' => $date, 'role' => $u->role, 'notifications' => $u->unreadNotifications()->latest()->limit(5)->get()];
         if ($u->role === 'admin') {
             $data['salesDate'] = $r->input('sales_date') ?: today()->toDateString();
-            $data['salesPeriod'] = $r->input('sales_period') ?: 'daily';
+            $data['salesPeriod'] = $r->input('sales_period') ?: 'weekly';
             $data['salesCharts'] = $salesReport->build($data['salesDate']);
         }
         if ($u->role === 'purchaser') {

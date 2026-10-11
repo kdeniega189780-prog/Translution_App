@@ -56,6 +56,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     });
     Route::middleware('role:admin,purchaser')->group(function () {
         Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+        Route::get('/inventory/{part}/stock-out', [InventoryController::class, 'stockOutForm'])->name('inventory.stock-out.create');
+        Route::post('/inventory/{part}/stock-out', [InventoryController::class, 'stockOut'])->name('inventory.stock-out.store');
         Route::resource('orders', OrderController::class)->only(['index', 'create', 'store', 'edit', 'update']);
         Route::post('/orders/{order}/advance', [OrderController::class, 'advance'])->name('orders.advance');
     });

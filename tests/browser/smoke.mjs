@@ -54,6 +54,71 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("dialog", (dialog) => dialog.accept());
+  async function recordStockOut(role) {
+    await page.goto(env.APP_URL + "/inventory");
+    await page
+      .getByRole("link", { name: /^Stock Out:/ })
+      .first()
+      .click();
+    const stockOutUrl = page.url();
+    const available = Number.parseInt(
+      await page.locator(".details dd").last().innerText(),
+      10,
+    );
+    await page.getByLabel("Quantity to remove").fill(String(available + 1));
+    assert.equal(
+      await page
+        .locator("#quantity")
+        .evaluate((el) => el.validity.rangeOverflow),
+      true,
+    );
+    await page.getByLabel("Quantity to remove").fill("1");
+    const reason = `${role}: damaged item returned to supplier`;
+    await page.getByLabel("Reason for stock out").fill(reason);
+    const viewport = page.viewportSize();
+    for (const width of [1440, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+        `Stock Out overflow at ${width}`,
+      );
+      await page.screenshot({
+        path: `test-results/stock-out-${role}-${width}.png`,
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await page.setViewportSize(viewport);
+    await page
+      .getByRole("button", { name: "Record stock out", exact: true })
+      .click();
+    await page.waitForURL("**/inventory");
+    assert.equal(
+      await page
+        .getByText("Stock out recorded. Inventory quantity updated.", {
+          exact: true,
+        })
+        .count(),
+      1,
+    );
+    const movement = page
+      .locator("#stock-movements tbody tr")
+      .filter({ hasText: reason });
+    assert.equal(await movement.locator("td").nth(2).innerText(), "Stock Out");
+    assert.equal(await movement.locator("td").nth(3).innerText(), "-1");
+    assert.equal(
+      await movement.locator("td").nth(4).innerText(),
+      String(available - 1),
+    );
+    await page.goto(stockOutUrl);
+    assert.match(
+      await page.locator(".details dd").last().innerText(),
+      new RegExp(`^${available - 1} units$`),
+    );
+  }
   await page.goto(env.APP_URL + "/");
   assert.equal(
     await page.getByRole("heading", { name: /A smoother ride/ }).count(),
@@ -159,6 +224,7 @@ try {
     path: "test-results/invoice-desktop.png",
     fullPage: true,
   });
+  await recordStockOut("admin");
   await page.goto(env.APP_URL + "/reports");
   const [download] = await Promise.all([
     page.waitForEvent("download"),
@@ -237,6 +303,10 @@ try {
     await page.locator("#password_confirmation").fill("BrowserChanged!42");
     await page.getByRole("button", { name: "Save profile" }).click();
     await page.waitForURL("**/dashboard");
+    if (role === "purchaser") {
+      await recordStockOut(role);
+      await page.goto(env.APP_URL + "/dashboard");
+    }
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,
@@ -287,7 +357,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    "Browser checks passed: all roles, first password change, full paid repair, PDF, CSRF, desktop and mobile layout.",
+    "Browser checks passed: all roles, first password change, full paid repair, admin/purchaser stock out, PDF, CSRF, desktop and mobile layout.",
   );
 } finally {
   await browser?.close();
