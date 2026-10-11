@@ -11,6 +11,39 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryWorkflow
 {
+    public function stockOut(User $actor, Part $part, array $data): void
+    {
+        abort_unless($actor->hasRole('admin', 'purchaser'), 403);
+
+        DB::transaction(function () use ($actor, $part, $data) {
+            $part = Part::lockForUpdate()->findOrFail($part->id);
+            if ($part->quantity !== (int) $data['expected_quantity']) {
+                throw ValidationException::withMessages(['quantity' => 'Stock has changed since you opened this form. Review the current quantity and try again.']);
+            }
+
+            $quantity = (int) $data['quantity'];
+            if ($quantity < 1 || $quantity > $part->quantity) {
+                throw ValidationException::withMessages(['quantity' => 'Enter a quantity between 1 and the available stock ('.$part->quantity.').']);
+            }
+
+            $part->decrement('quantity', $quantity);
+            $movement = StockMovement::create([
+                'part_id' => $part->id,
+                'user_id' => $actor->id,
+                'type' => 'stock_out',
+                'quantity' => -$quantity,
+                'balance' => $part->quantity,
+                'note' => $data['reason'],
+            ]);
+            Audit::record($actor, 'stock.out', $part, [
+                'movement_id' => $movement->id,
+                'quantity' => $quantity,
+                'balance' => $part->quantity,
+                'reason' => $data['reason'],
+            ]);
+        }, 3);
+    }
+
     public function createOrder(User $actor, array $data): PartsOrder
     {
         abort_unless($actor->hasRole('admin', 'purchaser'), 403);

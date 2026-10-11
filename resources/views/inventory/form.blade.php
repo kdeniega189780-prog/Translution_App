@@ -3,7 +3,7 @@
 @section('content')<div class="page-heading">
         <div>
             <h1>{{ $part->exists ? 'Edit part' : 'Add inventory part' }}</h1>
-            <p>Quantities change only when orders are received or parts are used.</p>
+            <p>Quantities change through order receipts, repair usage, or Stock Out.</p>
         </div>
     </div>
     <section class="card form-card">

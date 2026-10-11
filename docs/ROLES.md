@@ -7,7 +7,7 @@ The public home page is `/`. It introduces the workshop, services, and booking p
 | Secretary | Front Desk: customers, vehicles, booking requests, scheduling, mechanic assignment, customer approval with a contact note, invoices, payment, and release |
 | Mechanic | My Workbench: assigned jobs only, diagnosis, approved parts usage, and repair completion |
 | Admin | All workshop operations, account management, pricing, inventory, reports, and reversals |
-| Purchaser | Parts orders and receiving inventory |
+| Purchaser | Parts orders, receiving inventory, and recording stock out with a reason |
 | Customer | Own vehicles, bookings, repair approval, invoices, and service history |
 
 Mechanics cannot access customer management, vehicle management, invoices, payments, scheduling, or other mechanics' jobs. Secretaries cannot change diagnoses, record used parts, or complete repairs. Routes and policies enforce these restrictions independently of the UI. Admin retains oversight of every job.

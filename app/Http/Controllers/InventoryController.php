@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Application\Audit;
+use App\Application\InventoryWorkflow;
 use App\Http\Requests\ListRequest;
 use App\Http\Requests\PartRequest;
+use App\Http\Requests\StockOutRequest;
 use App\Models\Part;
 use App\Models\StockMovement;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,18 @@ class InventoryController extends Controller
     public function create()
     {
         return view('inventory.form', ['part' => new Part(['supplier' => config('workshop.supplier'), 'reorder_level' => 5])]);
+    }
+
+    public function stockOutForm(Part $part)
+    {
+        return view('inventory.stock-out', compact('part'));
+    }
+
+    public function stockOut(StockOutRequest $r, Part $part, InventoryWorkflow $flow)
+    {
+        $flow->stockOut($r->user(), $part, $r->validated());
+
+        return to_route('inventory.index')->with('status', 'Stock out recorded. Inventory quantity updated.');
     }
 
     public function store(PartRequest $r)

@@ -3,8 +3,8 @@
 ## Interface
 
 - [x] Plain Blade, CSS, and minimal JavaScript; no front-end framework or asset build required.
-- [x] Pastel palette variables, soft raised cards, inset fields, rounded corners, active sidebar pills, ring and chart visuals.
-- [x] Dark text on pastel surfaces, visible keyboard focus, borders in addition to shadows, 44px controls.
+- [x] Logo-inspired navy, crimson, and soft white palette; white cards, subtle shadows, rounded corners, and consistent ring/chart colors.
+- [x] Readable 16px body/input text with rem-based sizing, contrasting text, visible keyboard focus, borders in addition to shadows, and 44px controls.
 - [x] Named fields, icon labels, skip link, status text, accessible stepper, password visibility and strength feedback.
 - [x] Separate role menus and dashboards, daily schedule, simple forms, success/error and empty states.
 - [x] Responsive sidebar, phone layouts, scrollable tables, print invoice, downloadable PDF/CSV reports.

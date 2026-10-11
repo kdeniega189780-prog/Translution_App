@@ -87,6 +87,7 @@ class DashboardSalesTest extends TestCase
     {
         $this->payment('2026-10-01 09:00:00', '1250.50');
         $this->signIn('admin');
+        $this->get('/dashboard')->assertOk()->assertViewHas('salesPeriod', 'weekly');
         $this->get('/dashboard?sales_period=monthly&sales_date=2026-10-01')->assertOk()
             ->assertSee('Sales overview')->assertViewHas('salesPeriod', 'monthly')
             ->assertViewHas('salesDate', '2026-10-01')
@@ -102,5 +103,25 @@ class DashboardSalesTest extends TestCase
     {
         $this->signIn('admin');
         $this->get('/dashboard?sales_period=yearly&sales_date=bad-date')->assertSessionHasErrors(['sales_period', 'sales_date']);
+    }
+
+    public function test_payment_method_layers_add_up_to_sales_in_every_view(): void
+    {
+        foreach (['Cash' => '100.10', 'GCash' => '200.20', 'Bank Transfer' => '300.30', 'PayMaya' => '400.40'] as $method => $amount) {
+            $this->payment('2026-10-01 09:00:00', $amount)->update(['payment_method' => $method]);
+        }
+        $this->payment('2026-10-01 09:00:00', '50.50');
+        $this->payment('2026-10-01 09:00:00', '25.25')->update(['payment_method' => 'Legacy']);
+
+        foreach (app(DashboardSalesReport::class)->build('2026-10-01') as $chart) {
+            $this->assertSame('1076.75', $chart['total']);
+            foreach ($chart['points'] as $point) {
+                $sum = array_reduce($point['methods'], fn ($sum, $amount) => bcadd($sum, $amount, 2), '0.00');
+                $this->assertSame($point['amount'], $sum);
+                if ($point['payments'] > 0) {
+                    $this->assertSame(['Cash' => '100.10', 'GCash' => '200.20', 'Bank Transfer' => '300.30', 'PayMaya' => '400.40', 'Other' => '75.75'], $point['methods']);
+                }
+            }
+        }
     }
 }

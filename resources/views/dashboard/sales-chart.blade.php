@@ -33,16 +33,6 @@
             $step = ceil($rawStep / $magnitude) * $magnitude;
             $ceiling = $step * 4;
             $count = count($series['points']);
-            $coordinates = [];
-            foreach ($series['points'] as $index => $point) {
-                $coordinates[] = [
-                    'x' => round(20 + $index / ($count - 1) * 960, 2),
-                    'y' => round(240 - (float) $point['amount'] / $ceiling * 220, 2),
-                ];
-            }
-            $line = implode(' ', array_map(fn ($p) => $p['x'].','.$p['y'], $coordinates));
-            $area = 'M20,240 L'.implode(' L', array_map(fn ($p) => $p['x'].','.$p['y'], $coordinates)).' L980,240 Z';
-            $labels = $period === 'weekly' ? range(0, 6) : ($period === 'daily' ? [0, 4, 8, 12, 16, 20, 23] : array_values(array_unique([0, 4, 9, 14, 19, 24, $count - 1])));
         @endphp
         <div id="sales-panel-{{ $period }}" class="sales-panel" role="tabpanel"
             aria-labelledby="sales-tab-{{ $period }}" data-sales-panel="{{ $period }}" @if ($salesPeriod !== $period) hidden @endif>
@@ -56,6 +46,13 @@
             </div>
 
             <div class="sales-chart-caption"><span><i class="sales-legend-dot"></i>{{ $series['grouping'] }}</span><small>PHP · Philippine time</small></div>
+            <div class="sales-method-legend" aria-label="Payment methods">
+                @foreach (\App\Application\DashboardSalesReport::PAYMENT_METHODS as $methodIndex => $method)
+                    @if ($method !== 'Other' || collect($series['points'])->contains(fn ($point) => (float) $point['methods']['Other'] > 0))
+                        <span><i class="sales-method-{{ $methodIndex }}"></i>{{ $method }}</span>
+                    @endif
+                @endforeach
+            </div>
             <div class="sales-graph-layout">
                 <div class="sales-y-axis" aria-hidden="true">
                     @for ($tick = 4; $tick >= 0; $tick--)
@@ -63,46 +60,43 @@
                             $amount = $step * $tick;
                             $label = $amount >= 1000000 ? number_format($amount / 1000000, 1).'m' : ($amount >= 1000 ? number_format($amount / 1000, 1).'k' : number_format($amount, 0));
                         @endphp
-                        <span style="top:{{ 20 + (4 - $tick) * 55 }}px">{{ $label }}</span>
+                        <span style="top:{{ 20 + (4 - $tick) * 75 }}px">{{ $label }}</span>
                     @endfor
                 </div>
                 <div class="sales-plot" data-sales-plot data-points="{{ json_encode($series['points']) }}"
-                    tabindex="0" role="group" aria-label="{{ ucfirst($period) }} sales chart. Use Left and Right arrow keys to explore amounts."
+                    tabindex="0" role="group" aria-label="{{ ucfirst($period) }} sales bar chart. Use Left and Right arrow keys to explore amounts."
                     aria-describedby="sales-help-{{ $period }}">
-                    <svg viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
-                        <defs>
-                            <linearGradient id="sales-fill-{{ $period }}" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="#A8D5BA" stop-opacity="0.65" />
-                                <stop offset="100%" stop-color="#A8D5BA" stop-opacity="0.03" />
-                            </linearGradient>
-                        </defs>
-                        @for ($tick = 0; $tick <= 4; $tick++)
-                            <line class="sales-grid-line" x1="20" x2="980" y1="{{ 20 + $tick * 55 }}" y2="{{ 20 + $tick * 55 }}" />
-                        @endfor
-                        <path d="{{ $area }}" fill="url(#sales-fill-{{ $period }})" />
-                        <polyline class="sales-line" points="{{ $line }}" />
-                        <line class="sales-guide" data-sales-guide x1="20" x2="20" y1="20" y2="240" />
-                        @foreach ($coordinates as $index => $point)
-                            <circle class="sales-point {{ (float) $series['points'][$index]['amount'] > 0 ? 'has-sales' : '' }}"
-                                cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="4" data-sales-point="{{ $index }}" />
-                        @endforeach
-                    </svg>
+                    <div class="sales-bars-scroll" data-sales-scroll>
+                        <div class="sales-bars {{ $period === 'weekly' ? 'sales-bars-weekly' : '' }}" style="--bar-count: {{ $count }}" data-sales-bars>
+                            @foreach ($series['points'] as $index => $point)
+                                <div class="sales-bar-column {{ (float) $point['amount'] > 0 ? 'has-sales' : '' }}" data-sales-point="{{ $index }}" aria-hidden="true">
+                                    <div class="sales-bar-track">
+                                        <div class="sales-bar-fill" style="height: {{ (float) $point['amount'] / $ceiling * 100 }}%">
+                                            @foreach (\App\Application\DashboardSalesReport::PAYMENT_METHODS as $methodIndex => $method)
+                                                @if ((float) $point['methods'][$method] > 0)
+                                                    <span class="sales-bar-segment sales-method-{{ $methodIndex }}" style="height: {{ (float) $point['methods'][$method] / (float) $point['amount'] * 100 }}%" data-sales-method="{{ $method }}"></span>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                    <span class="sales-bar-label">{{ $point['label'] }}</span>
+                                    <span class="sales-bar-amount">₱{{ number_format((float) $point['amount'], (float) $point['amount'] == floor((float) $point['amount']) ? 0 : 2) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
                     <div class="sales-tooltip" data-sales-tooltip hidden>
                         <small data-sales-tooltip-label></small>
                         <strong data-sales-tooltip-amount></strong>
                         <span data-sales-tooltip-count></span>
+                        <div class="sales-tooltip-methods" data-sales-tooltip-methods></div>
                     </div>
                     <span class="sr-only" data-sales-announcement aria-live="polite"></span>
-                </div>
-                <div class="sales-x-axis" aria-hidden="true">
-                    @foreach ($labels as $index)
-                        <span style="left:{{ 2 + $index / ($count - 1) * 96 }}%">{{ $series['points'][$index]['label'] }}</span>
-                    @endforeach
                 </div>
             </div>
 
             <div class="sales-chart-footer">
-                <p id="sales-help-{{ $period }}">{{ $series['payments'] ? 'Hover or tap the graph to see each amount.' : 'No payments recorded for this '.['daily' => 'day', 'weekly' => 'week', 'monthly' => 'month'][$period].'. Paid invoices will appear here.' }}</p>
+                <p id="sales-help-{{ $period }}">{{ $series['payments'] ? 'Hover or tap a bar for details. Scroll sideways to see more.' : 'No payments recorded for this '.['daily' => 'day', 'weekly' => 'week', 'monthly' => 'month'][$period].'. Paid invoices will appear here.' }}</p>
                 <a href="{{ route('reports.index', ['period' => $period, 'date' => $salesDate]) }}">Full report <x-icon name="arrow" /></a>
             </div>
             <details class="sales-data-table">

@@ -12,17 +12,17 @@
     </div>
     @if ($role === 'purchaser')
         <div class="stats">
-            <div class="stat card"><span class="stat-icon blue"><x-icon name="box" /></span>
+            <div class="stat card stat-blue"><span class="stat-icon blue"><x-icon name="box" /></span>
                 <p>Parts in catalog</p><strong>{{ $partCount }}</strong><small>All inventory items</small>
             </div>
-            <div class="stat card"><span class="stat-icon lavender"><x-icon name="receipt" /></span>
+            <div class="stat card stat-lavender"><span class="stat-icon lavender"><x-icon name="receipt" /></span>
                 <p>Draft orders</p><strong>{{ $draftOrders }}</strong><small>Ready to review</small>
             </div>
-            <div class="stat card"><span class="stat-icon green"><x-icon name="box" /></span>
+            <div class="stat card stat-rose"><span class="stat-icon green"><x-icon name="box" /></span>
                 <p>Awaiting delivery</p><strong>{{ $openOrders }}</strong><a
                     href="{{ route('orders.index', ['receive' => 1]) }}">Receive stock →</a>
             </div>
-            <div class="stat card"><span class="stat-icon yellow"><x-icon name="box" /></span>
+            <div class="stat card stat-yellow"><span class="stat-icon yellow"><x-icon name="box" /></span>
                 <p>Low-stock items</p><strong>{{ $lowStock->count() }}</strong><small>Time to replenish</small>
             </div>
         </div>
@@ -41,18 +41,18 @@
         </section>
     @else
         <div class="stats">
-            <div class="stat card"><span class="stat-icon lavender"><x-icon name="calendar" /></span>
+            <div class="stat card stat-lavender"><span class="stat-icon lavender"><x-icon name="calendar" /></span>
                 <p>Today’s bookings</p><strong>{{ $todayCount }}</strong><small>{{ $pendingCount }} waiting for
                     confirmation</small>
             </div>
-            <div class="stat card"><span class="stat-icon blue"><x-icon name="wrench" /></span>
+            <div class="stat card stat-blue"><span class="stat-icon blue"><x-icon name="wrench" /></span>
                 <p>Cars in progress</p><strong>{{ $processingCount }}</strong><small>Care is underway</small>
             </div>
-            <div class="stat card"><span class="stat-icon green"><x-icon name="receipt" /></span>
+            <div class="stat card stat-rose"><span class="stat-icon green"><x-icon name="receipt" /></span>
                 <p>{{ $role === 'admin' ? 'Sales today' : 'Completed repairs' }}</p>
                 <strong>{{ $role === 'admin' ? '₱' . number_format($salesToday, 2) : $completedCount }}</strong><small>{{ $role === 'admin' ? 'Recorded payments' : 'Ready or released' }}</small>
             </div>
-            <div class="stat card"><span class="stat-icon yellow"><x-icon name="box" /></span>
+            <div class="stat card stat-yellow"><span class="stat-icon yellow"><x-icon name="box" /></span>
                 <p>{{ $role === 'admin' ? 'Low-stock items' : 'Total bookings' }}</p>
                 <strong>{{ $role === 'admin' ? $lowStock->count() : $totalCount }}</strong><small>{{ $role === 'admin' ? 'Keep your shelves ready' : 'Your care journey' }}</small>
             </div>

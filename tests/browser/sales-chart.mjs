@@ -65,6 +65,12 @@ try {
   await page.getByRole("button", { name: "Save profile" }).click();
   await page.waitForURL("**/dashboard");
   const chart = page.locator("[data-sales-chart]");
+  assert.equal(
+    await chart
+      .getByRole("tab", { name: "Weekly" })
+      .getAttribute("aria-selected"),
+    "true",
+  );
   for (const period of ["daily", "weekly", "monthly"]) {
     await chart.locator(`[data-sales-tab="${period}"]`).click();
     const panel = chart.locator(`[data-sales-panel="${period}"]`);
@@ -84,6 +90,16 @@ try {
       /2,775\.00/,
     );
     const plot = panel.locator("[data-sales-plot]");
+    const points = JSON.parse(await plot.getAttribute("data-points"));
+    assert.equal(await plot.locator(".sales-bar-track").count(), points.length);
+    const heights = await plot
+      .locator(".sales-bar-fill")
+      .evaluateAll((bars) =>
+        bars.map((bar) => bar.getBoundingClientRect().height),
+      );
+    points.forEach((point, index) => {
+      assert.equal(heights[index] > 0, Number(point.amount) > 0);
+    });
     await plot.hover();
     assert.equal(await panel.locator("[data-sales-tooltip]").isVisible(), true);
     await plot.focus();
@@ -113,6 +129,30 @@ try {
     await page.setViewportSize({ width, height: 844 });
     for (const period of ["daily", "weekly", "monthly"]) {
       await chart.locator(`[data-sales-tab="${period}"]`).click();
+      const mobilePlot = page.locator(
+        `[data-sales-panel="${period}"] [data-sales-plot]`,
+      );
+      await mobilePlot.focus();
+      await mobilePlot.press("End");
+      const lastBar = mobilePlot.locator("[data-sales-point]").last();
+      const barBounds = await lastBar.boundingBox();
+      const scrollBounds = await mobilePlot
+        .locator("[data-sales-scroll]")
+        .boundingBox();
+      assert.ok(barBounds.x >= scrollBounds.x - 1);
+      assert.ok(
+        barBounds.x + barBounds.width <=
+          scrollBounds.x + scrollBounds.width + 1,
+      );
+      const mobilePoints = JSON.parse(
+        await mobilePlot.getAttribute("data-points"),
+      );
+      assert.equal(
+        await mobilePlot.locator("[data-sales-tooltip-label]").innerText(),
+        mobilePoints.at(-1).description,
+      );
+      await mobilePlot.press("Home");
+      await mobilePlot.press("Escape");
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth,
@@ -139,6 +179,96 @@ try {
     /No payments recorded/,
   );
   assert.match(await monthly.locator(".sales-main-total").innerText(), /0\.00/);
+  assert.equal(
+    await monthly
+      .locator(".sales-bar-fill")
+      .evaluateAll((bars) =>
+        bars.every((bar) => bar.getBoundingClientRect().height === 0),
+      ),
+    true,
+  );
+  execFileSync(php, ["artisan", "db:seed", "--class=WorkshopDemoSeeder"], {
+    env,
+    stdio: "pipe",
+  });
+  await page.goto(env.APP_URL + "/dashboard?sales_period=monthly");
+  const samplePanel = page.locator('[data-sales-panel="monthly"]');
+  await samplePanel.waitFor({ state: "visible" });
+  const samplePoints = JSON.parse(
+    await samplePanel.locator("[data-sales-plot]").getAttribute("data-points"),
+  );
+  assert.ok(samplePoints.some((point) => Number(point.amount) > 2775));
+  const sampleHeights = await samplePanel
+    .locator(".sales-bar-fill")
+    .evaluateAll((bars) =>
+      bars.map((bar) => bar.getBoundingClientRect().height),
+    );
+  const largest = Math.max(
+    ...samplePoints.map((point) => Number(point.amount)),
+  );
+  const tallest = Math.max(...sampleHeights);
+  samplePoints.forEach((point, index) => {
+    assert.ok(
+      Math.abs(
+        sampleHeights[index] / tallest - Number(point.amount) / largest,
+      ) < 0.01,
+    );
+  });
+  const stacks = await samplePanel
+    .locator(".sales-bar-fill")
+    .evaluateAll((bars) =>
+      bars.map((bar) =>
+        Array.from(bar.children).map((segment) => ({
+          method: segment.dataset.salesMethod,
+          height: segment.getBoundingClientRect().height,
+        })),
+      ),
+    );
+  samplePoints.forEach((point, index) => {
+    const expected = Object.entries(point.methods).filter(
+      ([, amount]) => Number(amount) > 0,
+    );
+    assert.deepEqual(
+      stacks[index].map((segment) => segment.method),
+      expected.map(([method]) => method),
+    );
+    stacks[index].forEach((segment) => {
+      assert.ok(
+        Math.abs(
+          segment.height / sampleHeights[index] -
+            Number(point.methods[segment.method]) / Number(point.amount),
+        ) < 0.01,
+      );
+    });
+  });
+  const paidIndex = samplePoints.findIndex((point) => Number(point.amount) > 0);
+  await samplePanel.locator(`[data-sales-point="${paidIndex}"]`).click();
+  const breakdown = await samplePanel
+    .locator("[data-sales-tooltip-methods]")
+    .innerText();
+  Object.entries(samplePoints[paidIndex].methods).forEach(
+    ([method, amount]) => {
+      if (Number(amount) > 0) assert.ok(breakdown.includes(method));
+    },
+  );
+  await samplePanel.locator("[data-sales-plot]").press("Escape");
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+      `Sample sales chart overflow at ${width}px`,
+    );
+    await chart.screenshot({ path: `test-results/sales-demo-${width}.png` });
+    await chart.getByRole("tab", { name: "Weekly" }).click();
+    await chart.screenshot({
+      path: `test-results/sales-layered-weekly-${width}.png`,
+      animations: "disabled",
+    });
+    await chart.getByRole("tab", { name: "Monthly" }).click();
+  }
   assert.deepEqual(errors, []);
   console.log(
     "Sales chart browser checks passed: three periods, totals, tooltip, keyboard navigation, date filter, empty/leap month, and desktop/390px/320px layouts.",
